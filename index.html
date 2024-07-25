@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Student Attendance System</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h2 {
+            color: #333;
+        }
+
+        form {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            width: 80%;
+            margin: 0 auto;
+        }
+
+        label {
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        input[type="date"], input[type="submit"], input[type="text"], input[type="password"] {
+            padding: 8px;
+            width: 200px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        input[type="checkbox"] {
+            margin-right: 10px;
+        }
+
+        input[type="submit"] {
+            background-color: #4CAF50;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+        }
+
+        input[type="submit"]:hover {
+            background-color: #45a049;
+        }
+
+        .message {
+            color: #4CAF50;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        .logo-container {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .logo {
+            max-width: 100%;
+            height: auto;
+        }
+
+        body {
+            background: cyan;
+        }
+    </style>
+</head>
+<body>
+    
+    <div class="logo-container">
+        <img src="student.jpg" alt="logo" width="160" height="160">
+    </div>
+
+    <h1 style="text-align:center;color:blue;">Mark Attendance</h1>
+
+    <?php
+session_start();
+
+// Database connection
+$servername = "localhost";
+$username = "root";
+$password = "";
+$dbname = "attendance_system";
+
+$conn = new mysqli($servername, $username, $password, $dbname);
+if ($conn->connect_error) {
+    die("Connection failed: " . $conn->connect_error);
+}
+
+function isAuthenticated() {
+    return isset($_SESSION['user']);
+}
+
+function isAdmin() {
+    return isAuthenticated() && $_SESSION['user']['role'] === 'admin';
+}
+
+function isTeacher() {
+    return isAuthenticated() && $_SESSION['user']['role'] === 'teacher';
+}
+
+function isStudent() {
+    return isAuthenticated() && $_SESSION['user']['role'] === 'student';
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
+    $username = $_POST['username'];
+    $password = $_POST['password'];
+
+    $sql = "SELECT * FROM users WHERE username = '$username'";
+    $result = $conn->query($sql);
+    if ($result->num_rows > 0) {
+        $user = $result->fetch_assoc();
+        if (password_verify($password, $user['password'])) {
+            $_SESSION['user'] = $user;
+            header('Location: ' . $_SERVER['PHP_SELF']);
+            exit();
+        } else {
+            echo '<p>Invalid password</p>';
+        }
+    } else {
+        echo '<p>Invalid username</p>';
+    }
+}
+
+// Register admin user if not already registered
+$adminUsername = 'Santhosh07';
+$adminPassword = 'Santhosh';
+
+$hashedPassword = password_hash($adminPassword, PASSWORD_DEFAULT);
+
+$checkAdminQuery = "SELECT * FROM users WHERE username='$adminUsername'";
+$checkAdminResult = $conn->query($checkAdminQuery);
+if ($checkAdminResult->num_rows == 0) {
+    $insertAdminQuery = "INSERT INTO users (username, password, role) VALUES ('$adminUsername', '$hashedPassword', 'admin')";
+    $conn->query($insertAdminQuery);
+}
+
+if (!isAuthenticated()) {
+    echo '<form method="post" action="">';
+    echo '<label for="username">Username:</label>';
+    echo '<input type="text" id="username" name="username" required><br><br>';
+    echo '<label for="password">Password:</label>';
+    echo '<input type="password" id="password" name="password" required><br><br>';
+    echo '<input type="submit" name="login" value="Login">';
+    echo '</form>';
+    exit();
+}
+
+if (isAdmin()) {
+    echo '<h2>Admin Dashboard</h2>';
+    // Add user management, attendance reports, and other admin functionalities here.
+} elseif (isTeacher()) {
+    echo '<h2>Teacher Dashboard</h2>';
+    // Add functionalities for teachers to mark and edit attendance here.
+    $sql = "SELECT * FROM students";
+    $result = $conn->query($sql);
+
+    if ($result->num_rows > 0) {
+        echo '<form method="post" action="">';
+        echo '<label for="attendance_date">Attendance Date:</label>';
+        echo '<input type="date" id="attendance_date" name="attendance_date" required><br><br>';
+
+        echo '<table>';
+        echo '<tr><th>Roll Number</th><th>Name</th><th>Present/Absent</th></tr>';
+
+        while ($row = $result->fetch_assoc()) {
+            echo '<tr>';
+            echo '<td>' . $row['roll_number'] . '</td>';
+            echo '<td>' . $row['name'] . '</td>';
+            echo '<td><input type="checkbox" name="attendance[' . $row['id'] . ']" value="P"> Present</td>';
+            echo '</tr>';
+        }
+
+        echo '</table><br>';
+        echo '<input type="submit" name="submit" value="Submit Attendance">';
+        echo '</form>';
+
+        // Process form submission
+        if (isset($_POST['submit'])) {
+            $attendance_date = $_POST['attendance_date'];
+            $attendance = $_POST['attendance'];
+
+            foreach ($attendance as $student_id => $status) {
+                // Insert attendance record into database
+                $sql = "INSERT INTO attendance_records (student_id, attendance_date, status) VALUES ('$student_id', '$attendance_date', '$status')";
+                $conn->query($sql);
+            }
+
+            echo '<p>Attendance posted successfully!</p>';
+        }
+    } else {
+        echo '<p>No students found.</p>';
+    }
+} elseif (isStudent()) {
+    echo '<h2>Student Dashboard</h2>';
+    // Add functionalities for students to view their attendance here.
+    $user_id = $_SESSION['user']['id'];
+    $sql = "SELECT * FROM students WHERE user_id = $user_id";
+    $result = $conn->query($sql);
+
+    if ($result->num_rows > 0) {
+        $student = $result->fetch_assoc();
+        $student_id = $student['id'];
+
+        $sql = "SELECT * FROM attendance_records WHERE student_id = $student_id";
+        $result = $conn->query($sql);
+
+        if ($result->num_rows > 0) {
+            echo '<table>';
+            echo '<tr><th>Date</th><th>Status</th></tr>';
+
+            while ($row = $result->fetch_assoc()) {
+                echo '<tr>';
+                echo '<td>' . $row['attendance_date'] . '</td>';
+                echo '<td>' . $row['status'] . '</td>';
+                echo '</tr>';
+            }
+
+            echo '</table>';
+        } else {
+            echo '<p>No attendance records found.</p>';
+        }
+    } else {
+        echo '<p>Student not found.</p>';
+    }
+}
+
+$conn->close();
+?>
+</body>
+</html>
